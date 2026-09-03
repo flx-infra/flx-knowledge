@@ -31,7 +31,7 @@ services:
         loki-url: ${LOKI_URL:?falta LOKI_URL}
 
   kb-api:
-    image: ${KB_IMAGE:-fabreguesm/flx-knowledge}:${KB_TAG:-0.5.0}
+    image: ${KB_IMAGE:-fabreguesm/flx-knowledge}:${KB_TAG:-0.5.3}
     hostname: ${KB_HOSTNAME:-flxknowledge-flexxus-com-ar}
     ports:
       - "${KB_API_PORT:-7003}:8000"
