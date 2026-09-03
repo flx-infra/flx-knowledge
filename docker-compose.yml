@@ -1,33 +1,93 @@
 version: '3.6'
 
-services: 
-  flexxuserpweb:
-    image: fabreguesm/orderweb:latest
-    ports: 
-      - "5001:80"
+services:
+  kb-postgres:
+    image: pgvector/pgvector:0.8.2-pg18
     networks:
-      - traefik
-    deploy:      
-      placement:
-        constraints: ["${NODE}"]      
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.${SERVICE_NAME}.entrypoints=web"
-        - "traefik.http.routers.${SERVICE_NAME}.rule=Host(`${DOMAIN_NAME}`)"
-        - "traefik.http.middlewares.${SERVICE_NAME}-http.redirectscheme.scheme=https"
-        - "traefik.http.routers.${SERVICE_NAME}-https.rule=Host(`${DOMAIN_NAME}`)"
-        - "traefik.http.routers.${SERVICE_NAME}-https.entrypoints=https"
-        - "traefik.http.routers.${SERVICE_NAME}-https.tls=true"
-        - "traefik.http.routers.${SERVICE_NAME}-https.tls.certresolver=myresolver"
-        - "traefik.http.services.${SERVICE_NAME}.loadbalancer.server.port=80"     
+      - kb
     environment:
-      - MAIL_TO_ERROR=errores.flexxus@gmail.com
-      - URL_MAP_SERVICE=http://10.150.4.12:15310
+      - POSTGRES_DB=${KB_DB_NAME:-flx_knowledge}
+      - POSTGRES_USER=${KB_DB_USER}
+      - POSTGRES_PASSWORD=${KB_DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+    volumes:
+      # `/var/lib/postgresql`, NO `/var/lib/postgresql/data`: en pg18+ el mount
+      # en /data hace que el contenedor no arranque.
+      - 'kb_pgdata:/var/lib/postgresql'
+    restart: unless-stopped
+    deploy:
+      placement:
+        constraints: ["${NODE}"]
+      resources:
+        reservations:
+          memory: 256M
     logging:
       driver: loki
       options:
-        loki-url: ${LOKI_URL}  
+        loki-url: ${LOKI_URL}
+
+  kb-api:
+    image: ${KB_IMAGE:-fabreguesm/flx-knowledge}:${KB_TAG:-0.3.0}
+    hostname: ${KB_HOSTNAME:-flxknowledge-flexxus-com-ar}
+    ports:
+      - "${KB_API_PORT:-7003}:8000"
+    networks:
+      - kb
+      - traefik
+    environment:
+      - DATABASE_URL=postgresql://${KB_DB_USER}:${KB_DB_PASSWORD}@kb-postgres:5432/${KB_DB_NAME:-flx_knowledge}
+      - KB_LOG_LEVEL=${KB_LOG_LEVEL:-INFO}
+      - KB_BOOTSTRAP_ADMIN_KEY=${KB_BOOTSTRAP_ADMIN_KEY}
+
+      - KB_LLM_PROVIDER=${KB_LLM_PROVIDER:-gemini}
+      - KB_LLM_MODEL=${KB_LLM_MODEL:-gemini-3.6-flash}
+      - KB_LLM_API_KEY=${KB_LLM_API_KEY}
+      - KB_LLM_BASE_URL=${KB_LLM_BASE_URL:-}
+      - KB_LLM_RPM=${KB_LLM_RPM:-10}
+      - KB_LLM_INLINE=${KB_LLM_INLINE:-false}
+      - KB_LLM_CHUNKS=${KB_LLM_CHUNKS:-true}
+      - KB_LLM_MAX_OUTPUT_TOKENS=${KB_LLM_MAX_OUTPUT_TOKENS:-8192}
+      - KB_LLM_MAX_CONCURRENCY=${KB_LLM_MAX_CONCURRENCY:-2}
+
+      - KB_EMBEDDING_PROVIDER=${KB_EMBEDDING_PROVIDER:-gemini}
+      - KB_EMBEDDING_MODEL=${KB_EMBEDDING_MODEL:-gemini-embedding-001}
+      - KB_EMBEDDING_DIM=${KB_EMBEDDING_DIM:-1536}
+      - KB_EMBEDDING_API_KEY=${KB_EMBEDDING_API_KEY}
+      - KB_EMBEDDING_BASE_URL=${KB_EMBEDDING_BASE_URL:-}
+      - KB_EMBEDDING_BATCH=${KB_EMBEDDING_BATCH:-64}
+      - KB_EMBEDDING_RPM=${KB_EMBEDDING_RPM:-55}
+
+      - KB_DB_POOL_MIN=${KB_DB_POOL_MIN:-2}
+      - KB_DB_POOL_MAX=${KB_DB_POOL_MAX:-10}
+
+      - KB_SEARCH_LIMIT=${KB_SEARCH_LIMIT:-10}
+      - KB_SEARCH_MAX_LIMIT=${KB_SEARCH_MAX_LIMIT:-50}
+      - KB_SEARCH_LEXICAL_WEIGHT=${KB_SEARCH_LEXICAL_WEIGHT:-1.0}
+
+      - KB_INGEST_MAX_DOCUMENTS=${KB_INGEST_MAX_DOCUMENTS:-200}
+      - KB_INGEST_MAX_DOCUMENT_BYTES=${KB_INGEST_MAX_DOCUMENT_BYTES:-2000000}
+    restart: unless-stopped
+    deploy:
+      placement:
+        constraints: ["${NODE}"]
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 128M
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
+
+volumes:
+  kb_pgdata:
+    name: "${SERVICE_NAME}_pgdata"
+
 networks:
+  kb:
+    driver: overlay
+    attachable: true
   traefik:
-    external:
-      name: traefik-network
+    external: true
+    name: traefik-network
