@@ -1,3 +1,5 @@
+# flx-knowledge — base de conocimiento vectorial multi-proyecto.
+# Variables, onboarding y actualizaciones: ver DEPLOY.md.
 version: '3.6'
 
 services:
@@ -14,10 +16,11 @@ services:
       # `/var/lib/postgresql`, NO `/var/lib/postgresql/data`: en pg18+ el mount
       # en /data hace que el contenedor no arranque.
       - 'kb_pgdata:/var/lib/postgresql'
-    restart: unless-stopped
     deploy:
       placement:
-        constraints: ["${NODE}"]
+        constraints:
+          - "${NODE:?falta NODE, ej: node.hostname==worker2}"
+          - node.role == worker
       resources:
         reservations:
           memory: 256M
@@ -66,10 +69,11 @@ services:
 
       - KB_INGEST_MAX_DOCUMENTS=${KB_INGEST_MAX_DOCUMENTS:-200}
       - KB_INGEST_MAX_DOCUMENT_BYTES=${KB_INGEST_MAX_DOCUMENT_BYTES:-2000000}
-    restart: unless-stopped
     deploy:
       placement:
-        constraints: ["${NODE}"]
+        constraints:
+          - "${NODE:?falta NODE, ej: node.hostname==worker2}"
+          - node.role == worker
       resources:
         limits:
           memory: 768M
