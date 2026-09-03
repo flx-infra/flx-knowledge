@@ -6,7 +6,7 @@ services:
     networks:
       - kb
     ports:
-      - '7004:5432'
+      - '${KB_DB_PORT:-7004}:5432'
     environment:
       - POSTGRES_DB=${KB_DB_NAME:-flx_knowledge}
       - POSTGRES_USER=${KB_DB_USER:?falta KB_DB_USER}
@@ -16,7 +16,6 @@ services:
       # `/var/lib/postgresql`, NO `/var/lib/postgresql/data`: en pg18+ el mount
       # en /data hace que el contenedor no arranque.
       - 'kb_pgdata:/var/lib/postgresql'
-      
     deploy:
       placement:
         constraints:
